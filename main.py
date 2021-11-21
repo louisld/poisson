@@ -3,7 +3,16 @@ import numpy as np
 
 
 class Maillage(object):
+    """
+    Objet permettant de résoudre l'équation de Poisson avec un maillage donné.
+    """
+
     def __init__(self, N):
+        """
+        N : Taille du maillage
+        """
+        self.N = N
+
         """
         Matrice des coefficients :
         A : à gauche
@@ -12,8 +21,8 @@ class Maillage(object):
         D : en bas
         E : au centre
         S : source
+        U : solution
         """
-        self.N = N
         self.M = np.zeros((self.N+2, self.N+2))
         self.A = np.zeros((self.N+2, self.N+2))
         self.B = np.zeros((self.N+2, self.N+2))
@@ -24,6 +33,9 @@ class Maillage(object):
         self.U = np.zeros((self.N+2, self.N+2))
 
     def discretisation_laplacien(self):
+        """
+        Initialisation des coefficients des matrices du laplacien discret.
+        """
         for i in range(1, self.N+1):
             for j in range(1, self.N+1):
                 self.A[i, j] = 1
@@ -54,17 +66,20 @@ class Maillage(object):
             self.E[1, j] = 1
             self.E[self.N, j] = 1
 
-    def condition_dirichlet(self, valeur):
+    def condition_dirichlet(self):
+        """
+        Condition de Dirichlet
+        """
         for i in range(1, self.N+1):
-            self.S[i, 1] = valeur
-            self.S[i, self.N] = valeur
-            self.U[i, 1] = valeur
-            self.U[i, self.N] = valeur
+            self.S[i, 1] = 0
+            self.S[i, self.N] = 0
+            self.U[i, 1] = 0
+            self.U[i, self.N] = 0
         for j in range(1, self.N+1):
-            self.S[1, j] = valeur
-            self.S[self.N, j] = valeur
-            self.U[1, j] = valeur
-            self.U[self.N, j] = valeur
+            self.S[1, j] = 0
+            self.S[self.N, j] = 0
+            self.U[1, j] = 0
+            self.U[self.N, j] = 0
 
     def source_horizontale(self, x, y, longueur, valeur):
         i0 = int(x*self.N)
@@ -102,21 +117,10 @@ class Maillage(object):
 
 m = Maillage(65)
 m.discretisation_laplacien()
-m.condition_dirichlet(0.0)
+m.condition_dirichlet()
 m.source_horizontale(0.25, 0.4, 0.5, 1)
 m.source_horizontale(0.25, 0.6, 0.5, -1)
-print(m.S)
-print(m.U)
 m.calculer(100)
-print(m.U)
 
 plt.contour(m.U, 50)
 plt.show()
-
-# fig, ax = plt.subplots(1, 1)
-# ax.set_xlim(0, 1)
-# ax.set_ylim(0, 1)
-#
-# plt.plot([0.25, 0.75], [0.4, 0.4], color="red")
-# plt.plot([0.25, 0.75], [0.6, 0.6], color="blue")
-# plt.show()
