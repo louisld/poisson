@@ -9,7 +9,7 @@ class Maillage(object):
 
     def __init__(self, I, J):
         """
-        N : Taille du maillage
+        I, J : Taille du maillage
         """
         self.I = I
         self.J = J
@@ -19,7 +19,8 @@ class Maillage(object):
 
     def discretisation_laplacien(self, condition="Dirichlet"):
         """
-        Initialisation des coefficients des matrices du laplacien discret.
+        Initialisation des coefficients des matrices du laplacien discret soit
+        avec les conditions de Dirichlet soit avec celles de Newman.
         """
         epsx = self.I**2
         epsy = self.J**2
@@ -40,6 +41,9 @@ class Maillage(object):
             self.A += np.diag([epsx]*(self.I*self.J-self.J), k=-self.J)
 
     def source_horizontale(self, x, y, longueur, valeur):
+        """
+        Création d'une source de charge suivant une ligne horizontale.
+        """
         i0 = int(x*self.I)
         j0 = int(y*self.J)
         l0 = int(longueur*self.J)
@@ -61,11 +65,17 @@ class Maillage(object):
             self.gauss_seidel()
 
 
-m = Maillage(65, 65)
-m.discretisation_laplacien()
-m.source_horizontale(0.25, 0.4, 0.5, 1)
-m.source_horizontale(0.25, 0.6, 0.5, -1)
-m.calculer(100)
+if __name__ == '__main__':
+    """
+    Création d'un maillage 65x65 avec deux sources linéaire de charges 1 et -1
+    qui correspondent aux deux armatures du condensateur. On calcule ensuite la
+    solution grâce à la méthode de Gauss-Siedel.
+    """
+    m = Maillage(65, 65)
+    m.discretisation_laplacien()
+    m.source_horizontale(0.25, 0.4, 0.5, 1)
+    m.source_horizontale(0.25, 0.6, 0.5, -1)
+    m.calculer(100)
 
-plt.contour(m.U, 50)
-plt.show()
+    plt.contour(m.U, 50)
+    plt.show()
