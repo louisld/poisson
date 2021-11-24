@@ -1,20 +1,23 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy.sparse as sp
+import scipy.sparse.linalg
+from memory_profiler import profile
 
 
 class Maillage(object):
     """
     Objet permettant de résoudre l'équation de Poisson avec un maillage donné.
     """
-
+    @profile
     def __init__(self, I, J):
         """
         I, J : Taille du maillage
         """
         self.I = I
         self.J = J
-        self.A = np.zeros((I*J, I*J))
-        self.U = np.zeros(I*J)
+        self.A = sp.lil_matrix((I*J, I*J))
+        self.X = np.zeros(I*J)
         self.S = np.zeros(I*J)
 
     def discretisation_laplacien(self, condition="Dirichlet"):
@@ -25,20 +28,11 @@ class Maillage(object):
         epsx = self.I**2
         epsy = self.J**2
 
-        if condition == "Dirichlet":
-            self.A = np.diag([-2*(epsx+epsy)]*(self.I*self.J))
-            self.A += np.diag([epsy]*(self.I*self.J-1), k=1)
-            self.A += np.diag([epsy]*(self.I*self.J-1), k=-1)
-            self.A += np.diag([epsx]*(self.I*self.J-self.J), k=self.J)
-            self.A += np.diag([epsx]*(self.I*self.J-self.J), k=-self.J)
-        if condition == "Newman":
-            self.A = np.diag([-2*epsy-epsx]*self.J + [-2*(epsx+epsy)]
-                             * ((self.I-2)*self.J) + [-2*(epsy)-epsx]*self.J,
-                             k=0)
-            self.A += np.diag([epsy]*(self.I*self.J-1), k=1)
-            self.A += np.diag([epsy]*(self.I*self.J-1), k=-1)
-            self.A += np.diag([epsx]*(self.I*self.J-self.J), k=self.J)
-            self.A += np.diag([epsx]*(self.I*self.J-self.J), k=-self.J)
+        self.A.setdiag(-2*(epsx + epsy))
+        self.A.setdiag(epsy, 1)
+        self.A.setdiag(epsy, -1)
+        self.A.setdiag(epsx, self.J)
+        self.A.setdiag(epsx, -self.J)
 
     def source_horizontale(self, x, y, longueur, valeur):
         """
@@ -49,20 +43,33 @@ class Maillage(object):
         l0 = int(longueur*self.J)
         for i in range(i0, i0+l0):
             self.S[i*self.J + j0] = valeur
-            self.U[i*self.J + j0] = valeur
+            self.X[i*self.J + j0] = valeur
 
     def gauss_seidel(self):
         """
         Itération de Gauss-Seidel avec sur-relaxation de paramètre w
         """
-        self.U = ((1 - self.omega) * self.U
-                  + self.omega * (self.A_inv @ (self.A @ self.U - self.S)))
+        X_old = self.X
+        self.X = self.LD_inv * (self.omega * self.S
+                                + (1 - self.omega) * self.D
+                                - self.omega * self.U * self.X)
 
-    def calculer(self, iterations):
+        return np.linalg.norm(X_old - self.X)/np.linalg.norm(self.X)
+
+    @profile
+    def calculer(self):
+        """
+        Boucle de calcul
+        """
         self.omega = 2/(1 + np.sin(np.pi/(self.J-1)))
-        self.A_inv = np.linalg.inv(np.tril(self.A))
-        for k in range(iterations):
-            self.gauss_seidel()
+        self.L = sp.tril(self.A, format="csc")
+        self.D = sp.diags(self.A.diagonal(), 0, format="csc")
+        self.U = sp.triu(self.A, format="csc")
+        self.LD_inv = sp.linalg.inv(self.D + self.omega * self.L)
+        eps = np.inf
+        for i in range(100):
+            print(i)
+            eps = self.gauss_seidel()
 
 
 if __name__ == '__main__':
@@ -75,7 +82,7 @@ if __name__ == '__main__':
     m.discretisation_laplacien()
     m.source_horizontale(0.25, 0.4, 0.5, 1)
     m.source_horizontale(0.25, 0.6, 0.5, -1)
-    m.calculer(100)
+    m.calculer()
 
-    plt.contour(m.U, 50)
+    plt.contour(m.X.reshape(65, 65), 20)
     plt.show()
