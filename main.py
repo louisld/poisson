@@ -50,9 +50,8 @@ class Maillage(object):
         Itération de Gauss-Seidel avec sur-relaxation de paramètre w
         """
         X_old = self.X
-        self.X = self.LD_inv * (self.omega * self.S
-                                + (1 - self.omega) * self.D
-                                - self.omega * self.U * self.X)
+        self.X = ((1 - self.omega) * self.X
+                  - self.omega * self.LD_inv * (self.A * self.X - self.S))
 
         return np.linalg.norm(X_old - self.X)/np.linalg.norm(self.X)
 
@@ -65,10 +64,10 @@ class Maillage(object):
         self.L = sp.tril(self.A, format="csc")
         self.D = sp.diags(self.A.diagonal(), 0, format="csc")
         self.U = sp.triu(self.A, format="csc")
-        self.LD_inv = sp.linalg.inv(self.D + self.omega * self.L)
+        self.LD_inv = sp.linalg.inv(self.D/self.omega + self.L)
         eps = np.inf
-        for i in range(100):
-            print(i)
+        while eps > 1e-4:
+            print(eps)
             eps = self.gauss_seidel()
 
 
@@ -84,5 +83,5 @@ if __name__ == '__main__':
     m.source_horizontale(0.25, 0.6, 0.5, -1)
     m.calculer()
 
-    plt.contour(m.X.reshape(65, 65), 20)
+    plt.imshow(m.X.reshape(65, 65))
     plt.show()
