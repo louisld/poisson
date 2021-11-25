@@ -1,15 +1,17 @@
 import matplotlib.pyplot as plt
+from matplotlib import cm
 import numpy as np
 import scipy.sparse as sp
 import scipy.sparse.linalg
 from memory_profiler import profile
+from mpl_toolkits.mplot3d import Axes3D
 
 
 class Maillage(object):
     """
     Objet permettant de résoudre l'équation de Poisson avec un maillage donné.
     """
-    @profile
+
     def __init__(self, I, J):
         """
         I, J : Taille du maillage
@@ -45,18 +47,50 @@ class Maillage(object):
             self.S[i*self.J + j0] = valeur
             self.X[i*self.J + j0] = valeur
 
+    def condition_dirichlet(self, Vmin, Vmax):
+        """
+        Applique les conditions de dirichlet : les sources sont nuls au bord
+        """
+        V = (Vmax + Vmin)/2
+        for j in range(self.J):
+            # Pour i = 0
+            self.X[self.J * j] = V
+            # Pour i = self.I
+            self.X[self.I + (self.J-1) * j] = V
+        for i in range(self.I):
+            # Pour j = 0
+            self.X[i] = V
+            # Pour j = self.J
+            self.X[i + self.J*(self.J-1)] = V
+
     def gauss_seidel(self):
         """
-        Itération de Gauss-Seidel avec sur-relaxation de paramètre w
+        Itération de Gauss-Seidel avec sur-relaxation de paramètre omega
         """
         X_old = self.X
-        self.X = ((1 - self.omega) * self.X
-                  - self.omega * self.LD_inv * (self.A * self.X - self.S))
+        self.X = self.X - self.LD_inv * (self.A * self.X - self.S)
+        return np.linalg.norm(X_old - self.X)/np.linalg.norm(self.X)
 
+    def sor(self):
+        """
+        Itération de Gauss-Seidel avec sur-relaxation de paramètre omega.
+        Méthode de calcul trop lente.
+        """
+        X_old = self.X
+        for i in range(self.I*self.J):
+            s1 = 0
+            s2 = 0
+            for j in range(self.J*self.J):
+                if j < i:
+                    s1 += self.A[i, j] * self.X[j]
+                if j > i:
+                    s2 += self.A[i, j] * X_old[j]
+            self.X[i] = (1 - self.omega) * self.X[i] + self.omega / \
+                self.A[i, i] * (self.S[i] - s1 - s2)
         return np.linalg.norm(X_old - self.X)/np.linalg.norm(self.X)
 
     @profile
-    def calculer(self):
+    def calculer(self, seuil):
         """
         Boucle de calcul
         """
@@ -64,9 +98,9 @@ class Maillage(object):
         self.L = sp.tril(self.A, format="csc")
         self.D = sp.diags(self.A.diagonal(), 0, format="csc")
         self.U = sp.triu(self.A, format="csc")
-        self.LD_inv = sp.linalg.inv(self.D/self.omega + self.L)
+        self.LD_inv = sp.linalg.inv(self.D + self.L)
         eps = np.inf
-        while eps > 1e-4:
+        while eps > seuil:
             print(eps)
             eps = self.gauss_seidel()
 
@@ -81,7 +115,12 @@ if __name__ == '__main__':
     m.discretisation_laplacien()
     m.source_horizontale(0.25, 0.4, 0.5, 1)
     m.source_horizontale(0.25, 0.6, 0.5, -1)
-    m.calculer()
+    m.condition_dirichlet(-1, 1)
+    m.calculer(1e-3)
+    exit()
 
-    plt.imshow(m.X.reshape(65, 65))
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection="3d")
+    X, Y = np.meshgrid(range(65), range(65))
+    ax.plot_surface(X, Y, m.X.reshape(65, 65), cmap=cm.coolwarm)
     plt.show()
